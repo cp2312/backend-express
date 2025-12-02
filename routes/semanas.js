@@ -3,20 +3,8 @@ import pool from "../db.js";
 const router = express.Router();
 
 // CRUD semanas
-router.post("/", async (req, res) => {
-  const { fecha, nombre_semana, mes } = req.body;
-  try {
-    const q = await pool.query(
-      "INSERT INTO semanas (fecha, nombre_semana, mes) VALUES ($1,$2,$3) RETURNING *",
-      [fecha, nombre_semana, mes]
-    );
-    res.json(q.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error creando semana" });
-  }
-});
 
+// 1. Obtener todas las semanas
 router.get("/", async (req, res) => {
   try {
     const q = await pool.query("SELECT * FROM semanas ORDER BY fecha DESC");
@@ -27,34 +15,23 @@ router.get("/", async (req, res) => {
   }
 });
 
+// 2. Obtener semana por ID
 router.get("/:id", async (req, res) => {
   try {
     const q = await pool.query("SELECT * FROM semanas WHERE id=$1", [req.params.id]);
-    res.json(q.rows[0]);
+    if (q.rows.length > 0) {
+      res.json(q.rows[0]);
+    } else {
+      res.status(404).json({ error: "Semana no encontrada" });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error obteniendo semana" });
   }
 });
 
-router.delete("/:id", async (req, res) => {
-  try {
-    await pool.query("DELETE FROM semanas WHERE id=$1", [req.params.id]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error borrando semana" });
-  }
-});
-
-export default router;
-
-
-
-// En tu routes/semanas.js, agrega estos endpoints:
-
-// Obtener la semana activa actual
-router.get("/activa", async (req, res) => {
+// 3. Obtener la semana activa actual
+router.get("/activa/actual", async (req, res) => {
   try {
     const q = await pool.query("SELECT * FROM semanas WHERE activa = TRUE LIMIT 1");
     if (q.rows.length > 0) {
@@ -68,15 +45,33 @@ router.get("/activa", async (req, res) => {
   }
 });
 
-// Al crear una nueva semana, desactivar las anteriores y activar la nueva
+// 4. Crear nueva semana (y desactivar las anteriores)
 router.post("/", async (req, res) => {
   const { fecha, nombre_semana, mes } = req.body;
+  
+  // Verificar que la fecha no exista ya
+  try {
+    const checkQuery = await pool.query(
+      "SELECT * FROM semanas WHERE fecha = $1",
+      [fecha]
+    );
+    
+    if (checkQuery.rows.length > 0) {
+      return res.status(400).json({ 
+        error: "Ya existe una semana con esta fecha" 
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error verificando fecha" });
+  }
+  
   const client = await pool.connect();
   
   try {
     await client.query('BEGIN');
     
-    // 1. Desactivar todas las semanas
+    // 1. Desactivar todas las semanas anteriores
     await client.query("UPDATE semanas SET activa = FALSE WHERE activa = TRUE");
     
     // 2. Crear nueva semana activa
@@ -97,13 +92,57 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Endpoint para reiniciar semana (desactivar todas)
+// 5. Reiniciar semana (desactivar todas)
 router.post("/reiniciar", async (req, res) => {
   try {
     await pool.query("UPDATE semanas SET activa = FALSE WHERE activa = TRUE");
-    res.json({ ok: true, message: "Semana reiniciada" });
+    res.json({ 
+      ok: true, 
+      message: "Semana reiniciada correctamente",
+      semanas_desactivadas: true
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error reiniciando semana" });
   }
 });
+
+// 6. Eliminar semana por ID
+router.delete("/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM semanas WHERE id=$1", [req.params.id]);
+    res.json({ 
+      ok: true, 
+      message: "Semana eliminada correctamente" 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error borrando semana" });
+  }
+});
+
+// 7. Actualizar semana (opcional)
+router.put("/:id", async (req, res) => {
+  const { fecha, nombre_semana, mes, activa } = req.body;
+  
+  try {
+    const q = await pool.query(
+      `UPDATE semanas 
+       SET fecha=$1, nombre_semana=$2, mes=$3, activa=$4 
+       WHERE id=$5 
+       RETURNING *`,
+      [fecha, nombre_semana, mes, activa || false, req.params.id]
+    );
+    
+    if (q.rows.length > 0) {
+      res.json(q.rows[0]);
+    } else {
+      res.status(404).json({ error: "Semana no encontrada" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error actualizando semana" });
+  }
+});
+
+export default router;
