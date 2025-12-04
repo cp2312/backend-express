@@ -64,7 +64,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT - Actualizar cierre existente
+// PUT - Actualizar cierre existente (VERSIÓN CORREGIDA)
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { 
@@ -82,6 +82,12 @@ router.put("/:id", async (req, res) => {
     observaciones
   } = req.body;
   
+  console.log('=== PUT Cierre Request ===');
+  console.log('- ID:', id);
+  console.log('- prestamos recibido:', prestamos);
+  console.log('- Tipo de prestamos:', typeof prestamos);
+  console.log('- Es array?', Array.isArray(prestamos));
+  
   try {
     // Calcular diferencia
     const totalConceptos = Number(base) + Number(ventas) + Number(talonarios) + 
@@ -89,13 +95,26 @@ router.put("/:id", async (req, res) => {
     const totalPrestamos = Number(prestamos_total) || 0;
     const diferencia = (Number(total_efectivo) + totalPrestamos) - totalConceptos;
     
-    // Convertir prestamos a JSON si viene como array
+    // Convertir prestamos a JSON - VERSIÓN MEJORADA
     let prestamosJSON = '[]';
-    if (prestamos && Array.isArray(prestamos)) {
-      prestamosJSON = JSON.stringify(prestamos);
-    } else if (typeof prestamos === 'string') {
-      prestamosJSON = prestamos;
+    
+    if (prestamos !== undefined && prestamos !== null) {
+      if (Array.isArray(prestamos)) {
+        prestamosJSON = JSON.stringify(prestamos);
+      } else if (typeof prestamos === 'string') {
+        // Validar que sea JSON válido
+        try {
+          JSON.parse(prestamos);
+          prestamosJSON = prestamos;
+        } catch (e) {
+          console.error('Error: prestamos no es JSON válido:', prestamos);
+          prestamosJSON = '[]';
+        }
+      }
     }
+    // Si prestamos es undefined o null, mantener '[]'
+    
+    console.log('- prestamosJSON resultante:', prestamosJSON);
     
     const query = await pool.query(
       `UPDATE cierres_caja SET 
@@ -139,7 +158,9 @@ router.put("/:id", async (req, res) => {
     res.json(query.rows[0]);
   } catch (err) {
     console.error("Error actualizando cierre:", err);
-    res.status(500).json({ error: "Error actualizando cierre de caja" });
+    console.error("- Detalles del error:", err.message);
+    console.error("- Stack:", err.stack);
+    res.status(500).json({ error: "Error actualizando cierre de caja", details: err.message });
   }
 });
 
