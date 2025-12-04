@@ -64,7 +64,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT - Actualizar cierre existente (VERSIÓN CORREGIDA)
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { 
@@ -95,14 +94,13 @@ router.put("/:id", async (req, res) => {
     const totalPrestamos = Number(prestamos_total) || 0;
     const diferencia = (Number(total_efectivo) + totalPrestamos) - totalConceptos;
     
-    // Convertir prestamos a JSON - VERSIÓN MEJORADA
+    // Convertir prestamos a JSON
     let prestamosJSON = '[]';
     
     if (prestamos !== undefined && prestamos !== null) {
       if (Array.isArray(prestamos)) {
         prestamosJSON = JSON.stringify(prestamos);
       } else if (typeof prestamos === 'string') {
-        // Validar que sea JSON válido
         try {
           JSON.parse(prestamos);
           prestamosJSON = prestamos;
@@ -112,10 +110,10 @@ router.put("/:id", async (req, res) => {
         }
       }
     }
-    // Si prestamos es undefined o null, mantener '[]'
     
     console.log('- prestamosJSON resultante:', prestamosJSON);
     
+    // Query CORREGIDO - sin updated_at
     const query = await pool.query(
       `UPDATE cierres_caja SET 
         dia = $1, 
@@ -130,8 +128,8 @@ router.put("/:id", async (req, res) => {
         numero_caja = $10,
         prestamos = $11,
         prestamos_total = $12,
-        observaciones = $13,
-        updated_at = CURRENT_TIMESTAMP
+        observaciones = $13
+        -- updated_at eliminado porque no existe en la tabla
       WHERE id = $14 RETURNING *`,
       [
         dia, 
